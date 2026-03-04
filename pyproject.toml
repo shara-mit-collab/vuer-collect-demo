@@ -5,7 +5,9 @@ description = "Lightweight VR demo collection using Vuer + MuJoCo"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "vuer>=0.0.50",
+    "vuer[all]==0.0.53",
+    "aiohttp-cors",
+    "params-proto==2.13.2",
     "mujoco",
     "numpy",
     "zarr<3",

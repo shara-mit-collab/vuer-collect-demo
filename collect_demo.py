@@ -140,11 +140,11 @@ def parse_cli_args():
     args._needs_tunnel_resolve = False
 
     if args.localhost:
-        args.asset_prefix = f"http://localhost:{args.vuer_port}/workspace"
+        args.asset_prefix = f"http://localhost:{args.vuer_port}/static"
     elif args.asset_prefix is not None:
         pass  # explicit override
     elif args.tunnel_url:
-        args.asset_prefix = f"{args.tunnel_url.rstrip('/')}/workspace"
+        args.asset_prefix = f"{args.tunnel_url.rstrip('/')}/static"
     elif args.cloudflared:
         # Will be resolved after cloudflared starts
         args._needs_tunnel_resolve = True
@@ -236,7 +236,7 @@ def main():
     if args.cloudflared or args._needs_tunnel_resolve:
         tunnel_url = _launch_cloudflared(args.vuer_port)
         args.tunnel_url = tunnel_url
-        args.asset_prefix = f"{tunnel_url}/workspace"
+        args.asset_prefix = f"{tunnel_url}/static"
         args.src = f"{args.asset_prefix}/{args.entry_file}"
 
     from vuer import Vuer, VuerSession
