@@ -7,7 +7,6 @@ Record manipulation trajectories from a VR headset and save them as Zarr files.
 
 - **Python 3.10+**
 - **Meta Quest 2 / 3 / Pro** (or any WebXR-capable headset)
-- A computer on the same network as the headset (or ngrok for remote access)
 
 ## Setup
 
@@ -27,46 +26,80 @@ uv sync
 
 That's it — `uv sync` creates a virtual environment and installs all dependencies automatically.
 
-### 3. Set up ngrok (for remote access)
+### 3. Set up a tunnel
 
-ngrok creates a public URL that tunnels to your local machine, so the VR headset can connect even if it's not on the same network.
+Your VR headset needs a public URL to connect to. Pick **one** of these options:
 
-1. **Create an ngrok account** at https://ngrok.com (free tier works)
-2. **Install ngrok:**
+#### Option A: Cloudflare Tunnel (free, no account needed) — Recommended
+
+Install cloudflared:
+```bash
+# macOS
+brew install cloudflared
+# Linux
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+chmod +x cloudflared && sudo mv cloudflared /usr/local/bin/
+```
+
+That's all — pass `--cloudflared` when running and the tunnel launches automatically. A temporary public URL is generated each time (no sign-up needed).
+
+#### Option B: ngrok (free tier, stable URL)
+
+If you want a **persistent URL** that doesn't change each run:
+
+1. Create an account at https://ngrok.com (free tier works)
+2. Install: `brew install ngrok`
+3. Authenticate: `ngrok config add-authtoken YOUR_TOKEN`
+   (find your token at https://dashboard.ngrok.com/get-started/your-authtoken)
+4. Reserve a free static domain at https://dashboard.ngrok.com/domains
+5. Add to your shell profile:
    ```bash
-   # macOS
-   brew install ngrok
-   # or download from https://ngrok.com/download
-   ```
-3. **Authenticate:**
-   ```bash
-   ngrok config add-authtoken YOUR_AUTH_TOKEN
-   ```
-   (Find your auth token at https://dashboard.ngrok.com/get-started/your-authtoken)
-4. **Reserve a free static domain** at https://dashboard.ngrok.com/domains — you get one free domain on the free tier. It will look something like `something-random-name.ngrok-free.app`.
-5. **Add it to your shell profile** so you don't have to type it every time:
-   ```bash
-   echo 'export NGROK_URL=https://YOUR-DOMAIN.ngrok-free.app' >> ~/.zshrc
+   echo 'export TUNNEL_URL=https://YOUR-DOMAIN.ngrok-free.app' >> ~/.zshrc
    source ~/.zshrc
    ```
+6. Start the tunnel in a **separate terminal** before running:
+   ```bash
+   ngrok http 8012 --url $TUNNEL_URL
+   ```
 
-> **Skip ngrok?** If your headset and computer are on the same WiFi network, you can use `--localhost` instead and open `https://vuer.ai/workspace?ws=ws://YOUR_COMPUTER_IP:8012` on the headset.
+#### Option C: localhost (no tunnel, same network only)
+
+If your headset and computer are on the same WiFi, pass `--localhost` and open `https://vuer.ai/workspace?ws=ws://YOUR_COMPUTER_IP:8012` on the headset.
 
 ## Running
 
-### 1. Start the ngrok tunnel (in a separate terminal)
-
-```bash
-ngrok http 8012 --url $NGROK_URL
-```
-
-Keep this running in the background.
-
-### 2. Start the collection server
+### With cloudflared (recommended — single command)
 
 ```bash
 uv run python collect_demo.py \
     --scene-dir scenes/three_block_dual_sharpa \
+    --cloudflared \
+    --actuators duo \
+    --hands-scale 1.5 \
+    --show-lights
+```
+
+### With ngrok
+
+```bash
+# Terminal 1: start ngrok
+ngrok http 8012 --url $TUNNEL_URL
+
+# Terminal 2: start collection
+uv run python collect_demo.py \
+    --scene-dir scenes/three_block_dual_sharpa \
+    --tunnel-url $TUNNEL_URL \
+    --actuators duo \
+    --hands-scale 1.5 \
+    --show-lights
+```
+
+### With localhost
+
+```bash
+uv run python collect_demo.py \
+    --scene-dir scenes/three_block_dual_sharpa \
+    --localhost \
     --actuators duo \
     --hands-scale 1.5 \
     --show-lights
@@ -74,10 +107,10 @@ uv run python collect_demo.py \
 
 The script will print a URL like:
 ```
-Visit: https://vuer.ai/workspace?ws=wss://your-domain.ngrok-free.app
+Visit: https://vuer.ai/workspace?ws=wss://something-random.trycloudflare.com
 ```
 
-### 3. Connect from the VR headset
+### Connect from the VR headset
 
 1. Open the **Meta Quest Browser** on your headset
 2. Navigate to the URL printed in the terminal
@@ -119,7 +152,7 @@ data/<scene-name>/<YYYYMMDD_HHMM>/frames_zarr/
    ```
 3. Run:
    ```bash
-   uv run python collect_demo.py --scene-dir scenes/my_scene --actuators duo
+   uv run python collect_demo.py --scene-dir scenes/my_scene --cloudflared --actuators duo
    ```
 
 ## CLI reference
@@ -127,11 +160,12 @@ data/<scene-name>/<YYYYMMDD_HHMM>/frames_zarr/
 | Flag | Default | Description |
 |---|---|---|
 | `--scene-dir` | *(required)* | Path to scene folder (must contain `*.mjcf.xml` and `assets/`) |
-| `--ngrok-url` | `$NGROK_URL` env var | Your ngrok static URL (e.g. `https://my-domain.ngrok-free.app`) |
+| `--cloudflared` | off | Auto-launch a free Cloudflare tunnel (no account needed) |
+| `--tunnel-url` | `$TUNNEL_URL` env var | Public tunnel URL (for ngrok or manual tunnels) |
+| `--localhost` | off | Use localhost instead of a tunnel |
 | `--entry-file` | auto-detect | MJCF filename inside `--scene-dir` |
 | `--assets` | `assets` | Assets sub-folder name |
 | `--vuer-port` | `8012` | Local WebSocket port |
-| `--localhost` | off | Use localhost instead of ngrok |
 | `--data-dir` | `data` | Output directory for recordings |
 | `--actuators` | `mono` | `mono` (one gripper) / `duo` (two grippers) / `none` |
 | `--hands-scale` | `1.0` | Scale factor for VR hands |
@@ -175,9 +209,9 @@ qpos = ep["trajectory"]["qpos"][:]  # shape (T, D)
 ## Troubleshooting
 
 **"Connection failed" on the headset**
-- Make sure ngrok is running (`ngrok http 8012 --url $NGROK_URL`)
+- Make sure the tunnel is running (cloudflared or ngrok)
 - Make sure the collect_demo server is running
-- Check that `$NGROK_URL` matches your reserved domain exactly
+- Check that the URL on the headset matches what was printed in the terminal
 
 **Scene loads but hands don't appear**
 - Grant hand tracking permission when the browser prompts
@@ -189,3 +223,6 @@ qpos = ep["trajectory"]["qpos"][:]  # shape (T, D)
 **`uv sync` fails**
 - Make sure you have Python 3.10+: `python --version`
 - Try `uv sync --python 3.11` to pin a specific version
+
+**cloudflared not found**
+- Install with `brew install cloudflared` (macOS) or download from https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/

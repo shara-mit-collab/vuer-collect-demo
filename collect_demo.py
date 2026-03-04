@@ -87,15 +87,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--vuer-port", type=int, dest="vuer_port", default=int(os.environ.get("PORT", 8012)))
     parser.add_argument(
-        "--ngrok-url", type=str, dest="ngrok_url",
-        default=os.environ.get("NGROK_URL", f"https://{os.environ.get('USER', 'user')}-vuer-port.ngrok.app"),
-        help="Your ngrok static URL (e.g. https://myname-vuer-port.ngrok.app). Also settable via NGROK_URL env var.",
+        "--tunnel-url", type=str, dest="tunnel_url",
+        default=os.environ.get("TUNNEL_URL", os.environ.get("NGROK_URL")),
+        help="Public tunnel URL (ngrok or cloudflared). Also settable via TUNNEL_URL or NGROK_URL env var.",
+    )
+    parser.add_argument(
+        "--cloudflared", action="store_true",
+        help="Auto-launch a free cloudflared tunnel (no account needed)",
     )
     parser.add_argument(
         "--asset-prefix", type=str, dest="asset_prefix", default=None,
-        help="Override the full asset URL prefix (advanced; normally derived from --ngrok-url)",
+        help="Override the full asset URL prefix (advanced; normally derived from --tunnel-url)",
     )
-    parser.add_argument("--localhost", action="store_true", help="Use localhost instead of ngrok")
+    parser.add_argument("--localhost", action="store_true", help="Use localhost instead of a tunnel")
     parser.add_argument("--data-dir", type=str, dest="data_dir", default="data", help="Directory for saved trajectories")
     parser.add_argument(
         "--frame-keys", type=str, dest="frame_keys",
@@ -131,13 +135,27 @@ def parse_cli_args():
         args.entry_file = candidates[0].name
         print(f"[auto] Using entry file: {args.entry_file}")
 
-    # Resolve asset prefix: --localhost > --asset-prefix > --ngrok-url
+    # cloudflared auto-launch will be handled in main() after parse,
+    # so just mark that we need to resolve the prefix later.
+    args._needs_tunnel_resolve = False
+
     if args.localhost:
         args.asset_prefix = f"http://localhost:{args.vuer_port}/static"
-    elif args.asset_prefix is None:
-        args.asset_prefix = f"{args.ngrok_url.rstrip('/')}/static"
+    elif args.asset_prefix is not None:
+        pass  # explicit override
+    elif args.tunnel_url:
+        args.asset_prefix = f"{args.tunnel_url.rstrip('/')}/static"
+    elif args.cloudflared:
+        # Will be resolved after cloudflared starts
+        args._needs_tunnel_resolve = True
+        args.asset_prefix = None
+    else:
+        parser.error(
+            "Specify a tunnel: --tunnel-url URL, --cloudflared, or --localhost"
+        )
 
-    args.src = f"{args.asset_prefix}/{args.entry_file}"
+    if args.asset_prefix:
+        args.src = f"{args.asset_prefix}/{args.entry_file}"
     args.visible_groups = parse_num_list(args.visible_groups) if isinstance(args.visible_groups, str) else args.visible_groups
     args.init_keyframe = {}
 
@@ -171,8 +189,55 @@ def setup_keyboard_listener():
 # Main
 # ---------------------------------------------------------------------------
 
+def _launch_cloudflared(port: int) -> str:
+    """Launch cloudflared tunnel and return the public URL."""
+    import subprocess, re, time, signal, atexit
+
+    proc = subprocess.Popen(
+        ["cloudflared", "tunnel", "--url", f"http://localhost:{port}"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+
+    # Ensure tunnel is killed when the script exits
+    def _cleanup():
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=5)
+    atexit.register(_cleanup)
+
+    # Wait for cloudflared to print the public URL
+    url = None
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        line = proc.stdout.readline()
+        if not line:
+            break
+        match = re.search(r"(https://[a-zA-Z0-9-]+\.trycloudflare\.com)", line)
+        if match:
+            url = match.group(1)
+            break
+
+    if url is None:
+        proc.terminate()
+        raise RuntimeError(
+            "Could not start cloudflared tunnel. "
+            "Install it with: brew install cloudflared  (or see https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)"
+        )
+
+    print(f"[cloudflared] Tunnel running at {url}")
+    return url
+
+
 def main():
     args = parse_cli_args()
+
+    # Auto-launch cloudflared tunnel if requested
+    if args.cloudflared or args._needs_tunnel_resolve:
+        tunnel_url = _launch_cloudflared(args.vuer_port)
+        args.tunnel_url = tunnel_url
+        args.asset_prefix = f"{tunnel_url}/static"
+        args.src = f"{args.asset_prefix}/{args.entry_file}"
 
     from vuer import Vuer, VuerSession
     from vuer.events import ClientEvent
@@ -221,7 +286,7 @@ def main():
     if args.localhost:
         ws_url = f"ws://localhost:{args.vuer_port}"
     else:
-        ws_url = args.ngrok_url.replace("https://", "wss://").replace("http://", "ws://")
+        ws_url = args.tunnel_url.replace("https://", "wss://").replace("http://", "ws://")
     print(f"\nVisit: https://vuer.ai/workspace?ws={ws_url}")
     print(f"Data will be saved to: {os.path.abspath(run_dir)}\n")
 
