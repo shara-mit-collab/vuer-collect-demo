@@ -64,7 +64,7 @@ If you want a **persistent URL** that doesn't change each run:
 
 #### Option C: localhost (no tunnel, same network only)
 
-If your headset and computer are on the same WiFi, pass `--localhost` and open `http://YOUR_COMPUTER_IP:8012/editor` on the headset.
+If you just want to test the scene from a **desktop browser** (no VR), pass `--localhost` and open `http://localhost:8012/editor`. Note: `--localhost` does **not** work with a VR headset because WebXR requires HTTPS — use `--cloudflared` or `--tunnel-url` instead.
 
 ## Running
 
