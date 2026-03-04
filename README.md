@@ -8,32 +8,37 @@ Record manipulation trajectories from a VR headset and save them as Zarr files.
 ### 1. Install
 
 ```bash
+# Install uv if you don't have it
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and install
 git clone https://github.com/shara-mit-collab/vuer-collect-demo.git
 cd vuer-collect-demo
-pip install -e .
+uv sync
 ```
 
 ### 2. Set up ngrok
 
-Create an [ngrok](https://ngrok.com) account and install the CLI, then start a tunnel:
+Create an [ngrok](https://ngrok.com) account, install the CLI, and reserve a static domain (free tier gives one). Then start a tunnel:
 
 ```bash
-ngrok http 8012 --url $USER-vuer-port.ngrok.app
+ngrok http 8012 --url YOUR-DOMAIN.ngrok.app
 ```
-
-> Replace `$USER-vuer-port` with your reserved ngrok subdomain, or use `--localhost` to skip ngrok entirely (headset must be on the same network).
 
 ### 3. Run
 
 ```bash
-python collect_demo.py \
+uv run python collect_demo.py \
     --scene-dir scenes/three_block_dual_sharpa \
+    --ngrok-url https://YOUR-DOMAIN.ngrok.app \
     --actuators duo \
     --hands-scale 1.5 \
     --show-lights
 ```
 
 Open the URL printed in the terminal on your VR headset's browser.
+
+> **Tip:** Set `export NGROK_URL=https://YOUR-DOMAIN.ngrok.app` in your shell profile to avoid passing `--ngrok-url` every time.
 
 ### 4. Collect demos
 
@@ -51,11 +56,12 @@ Trajectories are saved under `data/<scene>/<timestamp>/frames_zarr/ep_00001.zarr
 | Flag | Default | Description |
 |---|---|---|
 | `--scene-dir` | *(required)* | Path to scene folder (must contain `*.mjcf.xml` and `assets/`) |
+| `--ngrok-url` | `$NGROK_URL` or `$USER-vuer-port.ngrok.app` | Your ngrok static URL |
 | `--entry-file` | auto-detect | MJCF filename inside `--scene-dir` |
 | `--assets` | `assets` | Assets sub-folder name |
 | `--vuer-port` | `8012` | Local WebSocket port |
-| `--asset-prefix` | ngrok URL | URL prefix for serving scene assets |
-| `--localhost` | off | Use `localhost` instead of ngrok |
+| `--asset-prefix` | derived from `--ngrok-url` | Override the full asset URL prefix (advanced) |
+| `--localhost` | off | Use `localhost` instead of ngrok (headset must be on same network) |
 | `--data-dir` | `data` | Output directory for recordings |
 | `--actuators` | `mono` | `mono` / `duo` / `none` — gripper control mode |
 | `--hands-scale` | `1.0` | Scale factor for VR hands |

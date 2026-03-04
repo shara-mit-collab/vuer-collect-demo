@@ -87,12 +87,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--vuer-port", type=int, dest="vuer_port", default=int(os.environ.get("PORT", 8012)))
     parser.add_argument(
-        "--asset-prefix", type=str, dest="asset_prefix",
-        default=os.environ.get(
-            "ASSET_PREFIX",
-            f"https://{os.environ.get('USER', 'user')}-vuer-port.ngrok.app/static",
-        ),
-        help="URL prefix for serving assets (set to http://localhost:<port>/static with --localhost)",
+        "--ngrok-url", type=str, dest="ngrok_url",
+        default=os.environ.get("NGROK_URL", f"https://{os.environ.get('USER', 'user')}-vuer-port.ngrok.app"),
+        help="Your ngrok static URL (e.g. https://myname-vuer-port.ngrok.app). Also settable via NGROK_URL env var.",
+    )
+    parser.add_argument(
+        "--asset-prefix", type=str, dest="asset_prefix", default=None,
+        help="Override the full asset URL prefix (advanced; normally derived from --ngrok-url)",
     )
     parser.add_argument("--localhost", action="store_true", help="Use localhost instead of ngrok")
     parser.add_argument("--data-dir", type=str, dest="data_dir", default="data", help="Directory for saved trajectories")
@@ -130,8 +131,11 @@ def parse_cli_args():
         args.entry_file = candidates[0].name
         print(f"[auto] Using entry file: {args.entry_file}")
 
+    # Resolve asset prefix: --localhost > --asset-prefix > --ngrok-url
     if args.localhost:
         args.asset_prefix = f"http://localhost:{args.vuer_port}/static"
+    elif args.asset_prefix is None:
+        args.asset_prefix = f"{args.ngrok_url.rstrip('/')}/static"
 
     args.src = f"{args.asset_prefix}/{args.entry_file}"
     args.visible_groups = parse_num_list(args.visible_groups) if isinstance(args.visible_groups, str) else args.visible_groups
@@ -214,7 +218,11 @@ def main():
     if xml_source.exists():
         (Path(run_dir) / xml_source.name).write_bytes(xml_source.read_bytes())
 
-    print(f"\nVisit: https://vuer.ai/workspace?ws={args.asset_prefix.replace('https://', 'wss://').replace('/static', '')}")
+    if args.localhost:
+        ws_url = f"ws://localhost:{args.vuer_port}"
+    else:
+        ws_url = args.ngrok_url.replace("https://", "wss://").replace("http://", "ws://")
+    print(f"\nVisit: https://vuer.ai/workspace?ws={ws_url}")
     print(f"Data will be saved to: {os.path.abspath(run_dir)}\n")
 
     # ----- MuJoCo component builder -----
