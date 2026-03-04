@@ -284,10 +284,10 @@ def main():
         (Path(run_dir) / xml_source.name).write_bytes(xml_source.read_bytes())
 
     if args.localhost:
-        ws_url = f"ws://localhost:{args.vuer_port}"
+        editor_url = f"http://localhost:{args.vuer_port}/editor"
     else:
-        ws_url = args.tunnel_url.replace("https://", "wss://").replace("http://", "ws://")
-    print(f"\nVisit: https://vuer.ai/workspace?ws={ws_url}")
+        editor_url = f"{args.tunnel_url.rstrip('/')}/editor"
+    print(f"\nOpen on headset: {editor_url}")
     print(f"Data will be saved to: {os.path.abspath(run_dir)}\n")
 
     # ----- MuJoCo component builder -----

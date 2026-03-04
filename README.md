@@ -64,7 +64,7 @@ If you want a **persistent URL** that doesn't change each run:
 
 #### Option C: localhost (no tunnel, same network only)
 
-If your headset and computer are on the same WiFi, pass `--localhost` and open `https://vuer.ai/workspace?ws=ws://YOUR_COMPUTER_IP:8012` on the headset.
+If your headset and computer are on the same WiFi, pass `--localhost` and open `http://YOUR_COMPUTER_IP:8012/editor` on the headset.
 
 ## Running
 
@@ -107,13 +107,13 @@ uv run python collect_demo.py \
 
 The script will print a URL like:
 ```
-Visit: https://vuer.ai/workspace?ws=wss://something-random.trycloudflare.com
+Open on headset: https://something-random.trycloudflare.com/editor
 ```
 
 ### Connect from the VR headset
 
 1. Open the **Meta Quest Browser** on your headset
-2. Navigate to the URL printed in the terminal
+2. Navigate to the `/editor` URL printed in the terminal (e.g. `https://your-domain.ngrok.app/editor`)
 3. When prompted, **allow hand tracking** permissions
 4. You should see the MuJoCo scene with your hands tracked in it
 
